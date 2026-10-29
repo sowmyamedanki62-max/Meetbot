@@ -1,31 +1,44 @@
-
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
 import whisper
 
-# Locate FFmpeg installed by Winget.
-FFMPEG_BIN = (
-    Path(os.environ["LOCALAPPDATA"])
-    / "Microsoft"
-    / "WinGet"
-    / "Packages"
-    / "Gyan.FFmpeg.Shared_Microsoft.Winget.Source_8wekyb3d8bbwe"
-    / "ffmpeg-9.0.2-full_build-shared"
-    / "bin"
-)
 
-# Make FFmpeg accessible to Whisper.
-if (FFMPEG_BIN / "ffmpeg.exe").is_file():
-    os.environ["PATH"] = (
-        str(FFMPEG_BIN)
-        + os.pathsep
-        + os.environ.get("PATH", "")
-    )
-else:
+def configure_ffmpeg():
+    """Find FFmpeg on Windows or Linux."""
+
+    # First, check whether FFmpeg is already available.
+    if shutil.which("ffmpeg"):
+        return
+
+    # Windows: check the Winget installation path.
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+
+        if local_app_data:
+            ffmpeg_bin = (
+                Path(local_app_data)
+                / "Microsoft"
+                / "WinGet"
+                / "Packages"
+                / "Gyan.FFmpeg.Shared_Microsoft.Winget.Source_8wekyb3d8bbwe"
+                / "ffmpeg-9.0.2-full_build-shared"
+                / "bin"
+            )
+
+            if (ffmpeg_bin / "ffmpeg.exe").is_file():
+                os.environ["PATH"] = (
+                    str(ffmpeg_bin)
+                    + os.pathsep
+                    + os.environ.get("PATH", "")
+                )
+                return
+
     raise FileNotFoundError(
-        f"FFmpeg was not found at: {FFMPEG_BIN}"
+        "FFmpeg was not found. Install FFmpeg and make sure "
+        "the ffmpeg executable is available on PATH."
     )
 
 
@@ -41,8 +54,13 @@ def transcribe_audio(uploaded_file):
         suffix = Path(uploaded_file.name).suffix.lower()
 
         allowed_extensions = {
-            ".mp3", ".wav", ".m4a", ".mpeg",
-            ".mpga", ".mp4", ".webm"
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".mpeg",
+            ".mpga",
+            ".mp4",
+            ".webm",
         }
 
         if suffix not in allowed_extensions:
@@ -51,9 +69,11 @@ def transcribe_audio(uploaded_file):
                 "M4A, MPEG, MPGA, MP4, or WEBM."
             )
 
+        configure_ffmpeg()
+
         with tempfile.NamedTemporaryFile(
             delete=False,
-            suffix=suffix
+            suffix=suffix,
         ) as temp_file:
             temp_file.write(uploaded_file.getvalue())
             temp_path = temp_file.name
